@@ -30,10 +30,26 @@ fGroups = factor(dfData$X90.day)
 
 dfData = dfData[,-c(1:94)]
 gc(reset = T)
-
+dim(dfData)
 dfData = na.omit(dfData)
+dim(dfData)
 mDat = log(dfData+1)
 mDat = t(mDat)
+
+# calculate a scaling factor
+m = colMeans(mDat)
+plot(m)
+k = hclust(dist(m))
+plot(k)
+c = cutree(k, k = 2)
+table(c)
+iOutliers = which(c == 2)
+mDat = mDat[,-iOutliers]
+sf = rowMeans(mDat)
+mDat.res = sweep(mDat, 1, sf, '-')
+sf = apply(mDat.res, 2, function(x) quantile(x, prob=0.5))
+mDat.norm = sweep(mDat, 2, sf, '-')
+
 
 url = 'https://raw.githubusercontent.com/uhkniazi/CDiagnosticPlots/master/CDiagnosticPlots.R'
 download(url, 'CDiagnosticPlots.R')
@@ -43,78 +59,119 @@ source('CDiagnosticPlots.R')
 # delete the file after source
 unlink('CDiagnosticPlots.R')
 
-oDiag.1 = CDiagnosticPlots(mDat, 'lneg')
-
+oDiag.1 = CDiagnosticPlots(mDat.norm, 'lneg norm')
+oDiag.2 = CDiagnosticPlots(mDat, 'lneg orig')
 # the batch variable we wish to colour by, 
 # this can be any grouping/clustering in the data capture process
 # e.g. in this case it is different lanes/machines
-fBatch = fGroups
+fBatch = fGroups[-iOutliers]
 
 ## compare the 2 methods using various plots
+par(mfrow=c(1,2))
 boxplot.median.summary(oDiag.1, fBatch, legend.pos = 'topright', axis.label.cex = 0.7)
+boxplot.median.summary(oDiag.2, fBatch, legend.pos = 'topright', axis.label.cex = 0.7)
 
 plot.mean.summary(oDiag.1, fBatch, axis.label.cex = 0.7)
+plot.mean.summary(oDiag.2, fBatch, axis.label.cex = 0.7)
 
 plot.sigma.summary(oDiag.1, fBatch, axis.label.cex = 0.7)
+plot.sigma.summary(oDiag.2, fBatch, axis.label.cex = 0.7)
 
-plot.missing.summary(oDiag.1, fBatch, axis.label.cex = 0.7, cex.main=1)
+#plot.missing.summary(oDiag.1, fBatch, axis.label.cex = 0.7, cex.main=1)
 
-plot.PCA(oDiag.1, fBatch, cex.main=1)
-
-plot.dendogram(oDiag.1, fBatch, labels_cex = 0.8, cex.main=0.7)
+# plot.PCA(oDiag.1, fBatch, cex.main=1)
+# 
+# plot.dendogram(oDiag.1, fBatch, labels_cex = 0.8, cex.main=0.7)
 
 ## change parameters 
 l = CDiagnosticPlotsGetParameters(oDiag.1)
 l$PCA.jitter = F
 l$HC.jitter = F
 
-oDiag.1.2 = CDiagnosticPlotsSetParameters(oDiag.1, l)
+oDiag.1 = CDiagnosticPlotsSetParameters(oDiag.1, l)
+oDiag.2 = CDiagnosticPlotsSetParameters(oDiag.2, l)
 plot.PCA(oDiag.1, fBatch)
+plot.PCA(oDiag.2, fBatch)
 plot.dendogram(oDiag.1, fBatch, labels_cex = 0.7)
+plot.dendogram(oDiag.2, fBatch, labels_cex = 0.7)
 
+mDat = mDat.norm
 # calculate the coef of var for each gene
 cv = apply(mDat, 1, function(x) sd(x)/abs(mean(x)))
 # check cv
 summary(cv)
 
 # cut data into groups based on quantiles of cv
-cut.pts = quantile(cv, probs = 0:10/10)
-groups = cut(cv, breaks = cut.pts, include.lowest = T)
-groups = cut(cv, breaks = cut.pts, include.lowest = T, labels = 0:9)
-iMean = apply(mDat, 1, mean)
-iVar = apply(mDat, 1, var)
-coplot((cv) ~ iMean | groups)
-coplot(iVar ~ iMean | groups)
-# choose genes with small cv
-# f = cv < 0.2
-# choosing groups from quantile 0 to 40
-mDat = mDat[groups %in% c(0, 1, 2, 3),]
+# cut.pts = quantile(cv, probs = 0:10/10)
+# groups = cut(cv, breaks = cut.pts, include.lowest = T)
+# groups = cut(cv, breaks = cut.pts, include.lowest = T, labels = 0:9)
+# iMean = apply(mDat, 1, mean)
+# iVar = apply(mDat, 1, var)
+# coplot((cv) ~ iMean | groups)
+# coplot(iVar ~ iMean | groups)
+# # choose genes with small cv
+# # f = cv < 0.2
+# # choosing groups from quantile 0 to 40
+# mDat.lowcv = mDat[groups %in% c(0),]
+# dim(mDat.lowcv)
+# 
+# sf = rowMeans(mDat.lowcv)
+# mDat.res = sweep(mDat.lowcv, 1, sf, '-')
+# sf = apply(mDat.res, 2, median)
+# mDat.norm2 = sweep(mDat, 2, sf, '-')
+# 
+# oDiag.1 = CDiagnosticPlots(mDat.norm, 'lneg norm')
+# oDiag.2 = CDiagnosticPlots(mDat.norm2, 'lneg norm2')
 
+dim(mDat)
 # select a subset of genes that show differential expression
-p.t = apply(mDat, 1, function(x) t.test(x ~ fGroups)$p.value)
+p.t = apply(mDat, 1, function(x) t.test(x ~ fGroups[-iOutliers])$p.value)
 p.t.adj = p.adjust(p.t, 'BH')
 p.t.adj = sort(p.t.adj, decreasing = F)
 t = names(p.t.adj[1:200])
-mDat.sub = mDat[rownames(mDat) %in% t,]
+cvTopFeatures.200 = t
 
-# set variables
-dfData.bk = dfData
-dfData = dfData[,rownames(mDat.sub)]
+mDat = mDat[rownames(mDat) %in% cvTopFeatures.200, ]
+
+## reload the clinical feature data
+dfData = read.csv('~/Downloads/FILES_FOR_BRC_ECR/LNEG LCMS WITH METADATA Transposed mass spec.csv', header = T, na.strings = c('na', 'NA', 'NaN'))
+dfData = dfData[-iOutliers,-c(1:3)]
+dim(dfData)
+## add the new normalised data
+colnames(dfData)[1:100]
+dfData = dfData[,1:91]
+dim(mDat)
+dim(dfData)
+dfData = cbind(dfData, t(mDat))
+dim(dfData)
+
+gc(reset = T)
+s = sapply(1:ncol(dfData), function(x) sum(is.na(dfData[,x])))
+i = which(s > 7)
+length(i)
+s[i]
+dfData = dfData[,-i]
 dim(dfData)
 dfData = na.omit(dfData)
 dim(dfData)
+fGroups = factor(dfData$X90.day)
+dfData = dfData[,-(which(colnames(dfData) %in% c('X90.day', 'X30.day', 'X1.Year', "Sample.File.Name")))]
+
+# set variables
+dfData.bk = dfData
 
 ## perform nested random forest
 ## adjust boot.num as desired
-oVar.r = CVariableSelection.RandomForest(dfData, fGroups, boot.num = 100)
+oVar.r = CVariableSelection.RandomForest(dfData, fGroups, boot.num = 100, big.warn = F)
 # plot the top 20 genes based on importance scort with 95% confidence interval for standard error
+par(mfrow=c(1,1))
 plot.var.selection(oVar.r)
 # get the variables
 dfRF = CVariableSelection.RandomForest.getVariables(oVar.r)
 # select the top 30 variables
-cvTopGenes = rownames(dfRF)[1:10]
+cvTopGenes = rownames(dfRF)[1:30]
 
-# use the top 30 genes to find top combinations of genes
+# use the top 30 features to find top combinations of genes
 dfData = dfData[,colnames(dfData) %in% cvTopGenes]
 
 ## look at colinear variables
@@ -133,8 +190,12 @@ data.frame(n)
 sapply(n, function(x) {
   (abs(mCor[,x]) >= 0.7)
 })
-
-cvKeep = c('X1091.89_623.234')
+s = sapply(n, function(x) {
+  (abs(mCor[,x]) >= 0.7)
+})
+colSums(s)
+#cvKeep = c('X1091.89_623.234', 'Neutrophil', 'MELD', 'X1106.76_466.66', 'X1091.88_607.132', 'X939.59_348.571')
+cvKeep = names(colSums(s)[colSums(s) <= 2])
 n = n[!(n%in% cvKeep)]
 i = which(colnames(dfData) %in% n)
 cn = colnames(dfData)[-i]
@@ -143,7 +204,6 @@ dfData.bk2 = dfData
 dfData = dfData[,cn]
 
 oVar.sub = CVariableSelection.ReduceModel(dfData, fGroups, boot.num = 50)
-
 # plot the number of variables vs average error rate
 plot.var.selection(oVar.sub)
 
@@ -175,3 +235,5 @@ for (i in 1:4){
   print(cvTopGenes.sub)
   print(signif(quantile(x, probs = c(0.025, 0.975)), 2))
 }
+##################################
+
