@@ -23,37 +23,96 @@ dfData = dfData[i,]
 dim(dfData)
 dfData = droplevels.data.frame(dfData)
 
-dfData = dfData[,1:93]
+write.csv(dfData, '~/Downloads/FILES_FOR_BRC_ECR/LNEG LCMS WITH METADATA Transposed mass spec.csv', row.names = F)
+
+dfData = read.csv('~/Downloads/FILES_FOR_BRC_ECR/LNEG LCMS WITH METADATA Transposed mass spec.csv', header = T, na.strings = c('na', 'NA', 'NaN'))
+fGroups = factor(dfData$X90.day)
+
+dfData = dfData[,-c(1:94)]
 gc(reset = T)
 
-str(dfData)
-write.csv(dfData, '~/Downloads/FILES_FOR_BRC_ECR/LNEG LCMS WITH METADATA Transposed.csv', row.names = F)
+dfData = na.omit(dfData)
+mDat = log(dfData+1)
+mDat = t(mDat)
 
-dfData = read.csv('~/Downloads/FILES_FOR_BRC_ECR/LNEG LCMS WITH METADATA Transposed.csv', header = T, na.strings = c('na', 'NA', 'NaN'))
+url = 'https://raw.githubusercontent.com/uhkniazi/CDiagnosticPlots/master/CDiagnosticPlots.R'
+download(url, 'CDiagnosticPlots.R')
 
-s = sapply(1:ncol(dfData), function(x) sum(is.na(dfData[,x])))
-s
-names(s) = colnames(dfData)
-s
+# load the required packages
+source('CDiagnosticPlots.R')
+# delete the file after source
+unlink('CDiagnosticPlots.R')
 
+oDiag.1 = CDiagnosticPlots(mDat, 'lneg')
+
+# the batch variable we wish to colour by, 
+# this can be any grouping/clustering in the data capture process
+# e.g. in this case it is different lanes/machines
+fBatch = fGroups
+
+## compare the 2 methods using various plots
+boxplot.median.summary(oDiag.1, fBatch, legend.pos = 'topright', axis.label.cex = 0.7)
+
+plot.mean.summary(oDiag.1, fBatch, axis.label.cex = 0.7)
+
+plot.sigma.summary(oDiag.1, fBatch, axis.label.cex = 0.7)
+
+plot.missing.summary(oDiag.1, fBatch, axis.label.cex = 0.7, cex.main=1)
+
+plot.PCA(oDiag.1, fBatch, cex.main=1)
+
+plot.dendogram(oDiag.1, fBatch, labels_cex = 0.8, cex.main=0.7)
+
+## change parameters 
+l = CDiagnosticPlotsGetParameters(oDiag.1)
+l$PCA.jitter = F
+l$HC.jitter = F
+
+oDiag.1.2 = CDiagnosticPlotsSetParameters(oDiag.1, l)
+plot.PCA(oDiag.1, fBatch)
+plot.dendogram(oDiag.1, fBatch, labels_cex = 0.7)
+
+# calculate the coef of var for each gene
+cv = apply(mDat, 1, function(x) sd(x)/abs(mean(x)))
+# check cv
+summary(cv)
+
+# cut data into groups based on quantiles of cv
+cut.pts = quantile(cv, probs = 0:10/10)
+groups = cut(cv, breaks = cut.pts, include.lowest = T)
+groups = cut(cv, breaks = cut.pts, include.lowest = T, labels = 0:9)
+iMean = apply(mDat, 1, mean)
+iVar = apply(mDat, 1, var)
+coplot((cv) ~ iMean | groups)
+coplot(iVar ~ iMean | groups)
+# choose genes with small cv
+# f = cv < 0.2
+# choosing groups from quantile 0 to 40
+mDat = mDat[groups %in% c(0, 1, 2, 3),]
+
+# select a subset of genes that show differential expression
+p.t = apply(mDat, 1, function(x) t.test(x ~ fGroups)$p.value)
+p.t.adj = p.adjust(p.t, 'BH')
+p.t.adj = sort(p.t.adj, decreasing = F)
+t = names(p.t.adj[1:200])
+mDat.sub = mDat[rownames(mDat) %in% t,]
 
 # set variables
 dfData.bk = dfData
-dfData = dfData[,-c(1:3)]
+dfData = dfData[,rownames(mDat.sub)]
+dim(dfData)
 dfData = na.omit(dfData)
 dim(dfData)
-fGroups = factor(dfData$X90.day)
-dfData = dfData[,-(which(colnames(dfData) %in% c('X90.day', 'X30.day', 'X1.Year')))]
 
 ## perform nested random forest
 ## adjust boot.num as desired
-oVar.r = CVariableSelection.RandomForest(dfData, fGroups, boot.num = 50)
+oVar.r = CVariableSelection.RandomForest(dfData, fGroups, boot.num = 100)
 # plot the top 20 genes based on importance scort with 95% confidence interval for standard error
 plot.var.selection(oVar.r)
 # get the variables
 dfRF = CVariableSelection.RandomForest.getVariables(oVar.r)
 # select the top 30 variables
-cvTopGenes = rownames(dfRF)[1:30]
+cvTopGenes = rownames(dfRF)[1:10]
 
 # use the top 30 genes to find top combinations of genes
 dfData = dfData[,colnames(dfData) %in% cvTopGenes]
@@ -75,15 +134,13 @@ sapply(n, function(x) {
   (abs(mCor[,x]) >= 0.7)
 })
 
-cvKeep = c('MELD', 'Neutrophil', 'MAP')
+cvKeep = c('X1091.89_623.234')
 n = n[!(n%in% cvKeep)]
 i = which(colnames(dfData) %in% n)
 cn = colnames(dfData)[-i]
 
 dfData.bk2 = dfData
 dfData = dfData[,cn]
-
-
 
 oVar.sub = CVariableSelection.ReduceModel(dfData, fGroups, boot.num = 50)
 
