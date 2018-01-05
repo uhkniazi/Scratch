@@ -160,9 +160,12 @@ dfData = dfData[,-(which(colnames(dfData) %in% c('X90.day', 'X30.day', 'X1.Year'
 # set variables
 dfData.bk = dfData
 
+## create a test and training set
+test = sample(1:nrow(dfData), size = nrow(dfData)*0.2, replace = F)
+
 ## perform nested random forest
 ## adjust boot.num as desired
-oVar.r = CVariableSelection.RandomForest(dfData, fGroups, boot.num = 100, big.warn = F)
+oVar.r = CVariableSelection.RandomForest(dfData[-test, ], fGroups[-test], boot.num = 100, big.warn = F)
 # plot the top 20 genes based on importance scort with 95% confidence interval for standard error
 par(mfrow=c(1,1))
 plot.var.selection(oVar.r)
@@ -179,7 +182,7 @@ dfData = dfData[,colnames(dfData) %in% cvTopGenes]
 m = NULL;
 
 for (i in 1:ncol(dfData)){
-  m = cbind(m, dfData[,i])
+  m = cbind(m, dfData[-test ,i])
 }
 colnames(m) = colnames(dfData)
 mCor = cor(m, use="na.or.complete")
@@ -195,7 +198,7 @@ s = sapply(n, function(x) {
 })
 colSums(s)
 #cvKeep = c('X1091.89_623.234', 'Neutrophil', 'MELD', 'X1106.76_466.66', 'X1091.88_607.132', 'X939.59_348.571')
-cvKeep = names(colSums(s)[colSums(s) <= 2])
+cvKeep = names(colSums(s)[colSums(s) <= 3])
 n = n[!(n%in% cvKeep)]
 i = which(colnames(dfData) %in% n)
 cn = colnames(dfData)[-i]
@@ -203,7 +206,7 @@ cn = colnames(dfData)[-i]
 dfData.bk2 = dfData
 dfData = dfData[,cn]
 
-oVar.sub = CVariableSelection.ReduceModel(dfData, fGroups, boot.num = 50)
+oVar.sub = CVariableSelection.ReduceModel(dfData[-test, ], fGroups[-test], boot.num = 50)
 # plot the number of variables vs average error rate
 plot.var.selection(oVar.sub)
 
@@ -217,15 +220,16 @@ for (i in 1:6){
 ## 10 fold nested cross validation with various variable combinations
 par(mfrow=c(2,2))
 # try models of various sizes with CV
-for (i in 1:4){
+for (i in 1:6){
   cvTopGenes.sub = CVariableSelection.ReduceModel.getMinModel(oVar.sub, i)
-  dfData.train = data.frame(dfData[,cvTopGenes.sub])
+  dfData.train = data.frame(dfData[-test ,cvTopGenes.sub])
   colnames(dfData.train) = cvTopGenes.sub
   
-  dfData.test = dfData.train
+  dfData.test = data.frame(dfData[test ,cvTopGenes.sub])
+  colnames(dfData.test) = cvTopGenes.sub
   
-  oCV = CCrossValidation.LDA(test.dat = dfData.test, train.dat = dfData.train, test.groups = fGroups,
-                             train.groups = fGroups, level.predict = '0', boot.num = 500)
+  oCV = CCrossValidation.LDA(test.dat = dfData.test, train.dat = dfData.train, test.groups = fGroups[test],
+                             train.groups = fGroups[-test], level.predict = '0', boot.num = 500)
   
   plot.cv.performance(oCV)
   # print variable names and 95% confidence interval for AUC
