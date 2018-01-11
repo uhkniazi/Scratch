@@ -142,6 +142,7 @@ colnames(dfData)[1:100]
 dfData = dfData[,1:91]
 dim(mDat)
 dim(dfData)
+identical(rownames(dfData), colnames(mDat))
 dfData = cbind(dfData, t(mDat))
 dim(dfData)
 
@@ -162,7 +163,7 @@ dfData.bk = dfData
 
 ## create a test and training set
 test = sample(1:nrow(dfData), size = nrow(dfData)*0.2, replace = F)
-
+table(fGroups[test])
 ## perform nested random forest
 ## adjust boot.num as desired
 oVar.r = CVariableSelection.RandomForest(dfData[-test, ], fGroups[-test], boot.num = 100, big.warn = F)
