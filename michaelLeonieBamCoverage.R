@@ -16,6 +16,7 @@ csFile = file.choose()
 ## 1- load the list of annotated genes
 ## 2- find the position of gene of interest
 ## 3- read the bam file over this gene
+## 4- show coverage over this gene
 
 ###### 1 - load the list of annotated genes
 library(TxDb.Hsapiens.UCSC.hg38.knownGene)
@@ -47,6 +48,7 @@ oGA = readGAlignmentPairs(bf, param=param)
 oGRLgenes = exonsBy(TxDb.Hsapiens.UCSC.hg38.knownGene, by = 'gene')
 oGRLgenes = oGRLgenes['2214']
 
+#### 4- show coverage over this gene
 # get the coverage over this transcript in the bam file
 cov = coverageByTranscript(oGA, oGRLgenes, ignore.strand=FALSE)
 
@@ -54,14 +56,19 @@ cov = coverageByTranscript(oGA, oGRLgenes, ignore.strand=FALSE)
 cov = cov$`2214`
 cov
 
-cov = coverage(oGA)
-cov = cov$chr1
+# 
+# # display the coverage over each exon
+# oViews = Views(cov, start = start(reduce(unlist(oGRLgenes))), end = end(reduce(unlist(oGRLgenes))))
 
-# display the coverage over each exon
-oViews = Views(cov, start = start(reduce(unlist(oGRLgenes))), end = end(reduce(unlist(oGRLgenes))))
+## number of reads aligned 
+cov2 = assays(summarizeOverlaps(oGRLgenes, bf, ignore.strand = F, singleEnd=F,
+                          param=param))$counts
 
-(assays(summarizeOverlaps(oGRLgenes, bf, ignore.strand = F, singleEnd=F,
-                          param=param))$counts)
 
-cov2 = (assays(summarizeOverlaps(reduce(unlist(oGRLgenes)), bf, ignore.strand = F, singleEnd=F,
+oGRLgenes = exonsBy(TxDb.Hsapiens.UCSC.hg38.knownGene, by = 'gene')
+length(oGRgene)
+which = oGRgene
+param = ScanBamParam(flag=flag, what = scanBamWhat(), which=which)
+
+cov3 = (assays(summarizeOverlaps(oGRLgenes, bf, ignore.strand = F, singleEnd=F,
                                  param=param))$counts)
