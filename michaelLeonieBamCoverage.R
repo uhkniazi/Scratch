@@ -65,10 +65,3 @@ cov2 = assays(summarizeOverlaps(oGRLgenes, bf, ignore.strand = F, singleEnd=F,
                           param=param))$counts
 
 
-oGRLgenes = exonsBy(TxDb.Hsapiens.UCSC.hg38.knownGene, by = 'gene')
-length(oGRgene)
-which = oGRgene
-param = ScanBamParam(flag=flag, what = scanBamWhat(), which=which)
-
-cov3 = (assays(summarizeOverlaps(oGRLgenes, bf, ignore.strand = F, singleEnd=F,
-                                 param=param))$counts)
