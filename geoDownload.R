@@ -5,18 +5,24 @@ library(GEOquery)
 library(downloader)
 
 ## open the soft format and raw data
-gse = getGEO('GSE114651')
+gse = getGEO('GSE103967')
 
-lFiles = list.files('~/Downloads/temp/GSE114651_RAW/')
+lFiles = list.files('~/Downloads/bronstein/GSE103967_RAW/')
 
-df = lapply(lFiles, function(x) read.csv(x, header=T,
-                                         sep=' ', row.names=1))
-df = do.call(cbind, df)
+dfSamples = read.csv('../metadata.txt', sep='\t', header=T)
 
-df = as.matrix(df)
-class(gse$GSE114651_series_matrix.txt.gz)
-exprs(gse$GSE114651_series_matrix.txt.gz) = df
-p = pData(gse$GSE114651_series_matrix.txt.gz)
+df = lapply(lFiles, function(x) {csv = read.csv(x, sep='\t', header=T, row.names=1)
+  return(rowSums(csv))
+  })
+df2 = do.call(cbind, df)
+
+lFiles = gsub('_\\w+\\.txt', '', lFiles)
+colnames(df2) = lFiles
+
+df = as.matrix(df2)
+class(gse$GSE103967_series_matrix.txt.gz)
+#exprs(gse$GSE103967_series_matrix.txt.gz) = df
+p = pData(gse$GSE103967_series_matrix.txt.gz)
 
 oExp = ExpressionSet(df)
 pData(oExp) = p
@@ -24,17 +30,17 @@ pData(oExp) = p
 cn = colnames(exprs(oExp))
 dfSamples = pData(oExp)
 # order the sample names according to pheno data table
-table(cn %in% as.character(dfSamples$title))
-i = match(cn, as.character(dfSamples$title))
+table(cn %in% rownames(dfSamples))
+i = match(cn, rownames(dfSamples))
 dfSamples = dfSamples[i,]
 ## sanity check
-identical(as.character(dfSamples$title), cn)
-rownames(dfSamples) = dfSamples$title
+identical(rownames(dfSamples), cn)
+#rownames(dfSamples) = dfSamples$title
 ## complete the expression set object by adding this sample information
 pData(oExp) = dfSamples
 # sanity check
 identical(colnames(oExp), rownames(pData(oExp)))
-save(oExp, file='oExp_raw_GSE114651.rds')
+save(oExp, file='oExp_raw_GSE103967.rds')
 ###########################################################
 
 # create database entries
