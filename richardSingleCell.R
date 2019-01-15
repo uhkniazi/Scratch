@@ -353,21 +353,43 @@ m = m[i]
 identical(names(m), rownames(dfResults))
 plotMeanFC(log(m), dfResults, 0.01, '')
 table(dfResults$pvalue < 0.05)
-table(dfResults$adj.P.Val < 0.05)
-## save the results 
-write.csv(dfResults, file='Temp/DEAnalysisMUC1-STvsMCSF.xls')
+table(dfResults$adj.P.Val < 0.01)
 
-# load old results
-dfResults.old = read.csv(file.choose(), header=T, stringsAsFactors = F)
-rownames(dfResults.old) = dfResults.old$Gene
-
-# make sure names match
+# make sure names match as - is replaced by . in factor names
+table(dfResults$SYMBOL %in% rownames(mData))
 s = gsub('\\.', '-', dfResults$SYMBOL)
 table(s %in% rownames(mData))
 si = which(!(s %in% rownames(mData)))
 s[si] = gsub('-', '.', s[si])
 table(s %in% rownames(mData))
 dfResults$SYMBOL = s
+
+## add variance term
+mVar = extract(fit.stan)$sigmaRan1
+dim(mVar)
+colnames(mVar) = levels(dfData$ind)
+
+table(colnames(mVar) %in% rownames(mData))
+s = gsub('\\.', '-', colnames(mVar))
+table(s %in% rownames(mData))
+si = which(!(s %in% rownames(mData)))
+s[si] = gsub('-', '.', s[si])
+table(s %in% rownames(mData))
+colnames(mVar) = s
+table(colnames(mVar) %in% dfResults$SYMBOL)
+i = match(dfResults$SYMBOL, colnames(mVar))
+mVar = mVar[,i]
+# sanity check
+identical(colnames(mVar), dfResults$SYMBOL)
+dfResults$Variance = colMeans(mVar)
+
+## save the results 
+write.csv(dfResults, file='Temp/DEAnalysisMUC1-STvsMCSF.xls')
+
+# load old results
+dfResults.old = read.csv(file.choose(), header=T, stringsAsFactors = F)
+#rownames(dfResults.old) = dfResults.old$Gene
+
 table(dfResults$SYMBOL %in% dfResults.old$Gene)
 dfResults.sub = dfResults[(dfResults$SYMBOL %in% dfResults.old$Gene), ]
 # put in same order
@@ -376,15 +398,81 @@ dfResults.old = dfResults.old[i,]
 identical(dfResults.sub$SYMBOL, dfResults.old$Gene)
 
 ## plot fc
-plot(dfResults.sub$logFC, log(dfResults.old$Ratio), pch=20)
-plot(dfResults.sub$logFC, log(dfResults.old$Ratio), pch=20, xlim=c(-5, 5), ylim=c(-4, 4))
+plot(dfResults.sub$logFC, log(dfResults.old$Ratio), pch=20, xlab='NB GLM FC', ylab='Older FC', sub='Missing 429 Genes in Older', main='Common 12744 Genes')
 plot(dfResults.sub$pvalue, dfResults.old$P.value, pch=20)
-plot(dfResults.sub$adj.P.Val, dfResults.old$FDR, pch=20)
-coplot(dfResults.sub$adj.P.Val ~ dfResults.old$FDR | abs(dfResults.sub$logFC), pch=20,
+plot(dfResults.sub$adj.P.Val, dfResults.old$FDR, pch=20, xlab='NB GLM FDR', ylab='Older FDR', sub='Missing 429 Genes in Older', main='Common 12744 Genes')
+# coplot(dfResults.sub$adj.P.Val ~ dfResults.old$FDR | abs(dfResults.sub$logFC), pch=20,
+#        ylab='NB GLM', xlab='Older')
+
+coplot(dfResults.sub$logFC ~ log(dfResults.old$Ratio) | dfResults.sub$Variance, pch=20,
        ylab='NB GLM', xlab='Older')
 
-coplot(dfResults.sub$logFC ~ log(dfResults.old$Ratio) | dfResults.sub$adj.P.Val, pch=20,
-       ylab='NB GLM', xlab='Older')
+# which genes are missing
+table(dfResults$SYMBOL %in% dfResults.old$Gene)
+dfResults.missing = dfResults[!(dfResults$SYMBOL %in% dfResults.old$Gene), ]
+
+par(mfrow=c(2,2))
+hist(dfResults.sub$logFC)
+hist(dfResults.sub$Variance)
+
+hist(dfResults.missing$logFC)
+hist(dfResults.missing$Variance)
+
+hist(dfResults.sub$pvalue)
+hist(dfResults.missing$pvalue)
+
+table(dfResults.sub$adj.P.Val < 0.01) # 17%
+table(dfResults.missing$adj.P.Val < 0.01) # 25%
+
+# compare the 2 datasets
+oDiag.sub = CDiagnosticPlots(log(mData[rownames(mData) %in% dfResults.sub$SYMBOL, ]+0.5), 'Common')
+oDiag.missing = CDiagnosticPlots(log(mData[rownames(mData) %in% dfResults.missing$SYMBOL, ]+0.5), 'Missing')
+# the batch variable we wish to colour by, 
+# this can be any grouping/clustering in the data capture process
+str(dfCovariates)
+fBatch = dfCovariates$patientId
+fBatch2 = dfCovariates$treatment
+
+#pdf('results/matrixClustering.pdf')
+
+## check using various plots
+par(mfrow=c(1,2))
+boxplot.median.summary(oDiag.sub, fBatch2, legend.pos = 'topright', axis.label.cex = 0.7)
+boxplot.median.summary(oDiag.missing, fBatch2, legend.pos = 'topright', axis.label.cex = 0.7)
+
+plot.mean.summary(oDiag.sub, fBatch2, axis.label.cex = 0.7, legend.pos = 'topright')
+plot.mean.summary(oDiag.missing, fBatch2, axis.label.cex = 0.7, legend.pos = 'topright')
+
+plot.sigma.summary(oDiag.sub, fBatch2, axis.label.cex = 0.7)
+plot.sigma.summary(oDiag.missing, fBatch2, axis.label.cex = 0.7)
+
+plot.missing.summary(oDiag.sub, fBatch2, axis.label.cex = 0.7, cex.main=1)
+plot.missing.summary(oDiag.missing, fBatch2, axis.label.cex = 0.7, cex.main=1)
+## change parameters 
+l = CDiagnosticPlotsGetParameters(oDiag.sub)
+l$PCA.jitter = F
+l$HC.jitter = F
+
+oDiag.sub = CDiagnosticPlotsSetParameters(oDiag.sub, l)
+oDiag.missing = CDiagnosticPlotsSetParameters(oDiag.missing, l)
+
+plot.PCA(oDiag.sub, fBatch2, legend.pos = 'right')
+plot.PCA(oDiag.missing, fBatch2, legend.pos = 'right')
+
+plot.dendogram(oDiag.sub, fBatch2, labels_cex = 1)
+plot.dendogram(oDiag.missing, fBatch2, labels_cex = 1)
+
+## order by fold changes
+dfResults.sub.order = dfResults.sub[order(abs(dfResults.sub$logFC), decreasing = T),]
+dfResults.order = dfResults[order(abs(dfResults$logFC), decreasing = T),]
+dfResults.old.order = dfResults.old[order(abs(log(dfResults.old$Ratio)), decreasing = T),]
+table(dfResults.sub.order$SYMBOL[1:100] %in% dfResults.old.order$Gene[1:100])
+table(dfResults.order$SYMBOL[1:100] %in% dfResults.old.order$Gene[1:100])
+
+## save the results 
+write.csv(dfResults.order, file='Temp/DEAnalysisMUC1-STvsMCSF_ordered.xls')
+write.csv(dfResults.missing, file='Temp/DEAnalysisMUC1-STvsMCSF_missing.xls')
+write.csv(dfResults.old.order, file='Temp/old_ordered.xls')
 
 ## looking at top left region of plot
 dfFDR = data.frame(sym=dfResults.sub$SYMBOL, mine=dfResults.sub$pvalue, their=dfResults.old$P.value, my.fc=dfResults.sub$logFC, their.fc=log(dfResults.old$Ratio))
@@ -395,7 +483,4 @@ dfFDR.bottomright = dfFDR[dfFDR$mine > 0.8 & dfFDR$their < 0.1, ]
 
 dfFC.topright = dfFDR[dfFDR$my.fc > 5, ]
 
-## order by fold changes
-dfResults.sub.order = dfResults.sub[order(abs(dfResults.sub$logFC), decreasing = T),]
-dfResults.old.order = dfResults.old[order(abs(log(dfResults.old$Ratio)), decreasing = T),]
-table(dfResults.sub.order$SYMBOL[1:100] %in% dfResults.old.order$Gene[1:100])
+
