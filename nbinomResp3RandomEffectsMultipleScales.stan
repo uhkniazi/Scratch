@@ -42,5 +42,5 @@ model {
   rGroupsJitter2 ~ normal(0, 1);
   rGroupsJitter3 ~ normal(0, 1);
   // likelihood function
-  y ~ neg_binomial(mu, iSize);
+  y ~ neg_binomial_2(mu, iSize);
 }
