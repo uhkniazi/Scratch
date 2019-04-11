@@ -89,3 +89,39 @@ getwd()
 n = make.names(paste('GSE47908.rds'))
 n2 = paste0('dataExternal/mansoor/', n)
 save(x.affy, file=n2)
+
+library(hgu133plus2.db)
+library(annotate)
+
+dfSamples = pData(x.affy)
+dim(dfSamples)
+fBatch = as.character(dfSamples$characteristics_ch1.1)
+fBatch = gsub('disease state: ', '', fBatch)
+fBatch[fBatch == 'ulcerative colitis-associated dysplasia'] = 'UC'
+fBatch = factor(fBatch)
+levels(fBatch)
+
+mDat = exprs(x.affy)
+# map the probe id to human symbols
+cvSym = getSYMBOL(rownames(mDat), 'hgu133plus2.db')
+# number of genes not annotated
+table(is.na(cvSym))
+# remove unannotated genes
+mDat = mDat[!is.na(cvSym),]
+
+### lmer library and function
+library(lme4)
+
+f_get.lme.sd = function(x, ran){
+  f = lmer(x ~ 1 + (1 | ran))
+  f2 = summary(f)
+  return(as.data.frame(f2$varcor)[,5])
+}
+
+mVar = apply(mDat, 1, f_get.lme.sd, fBatch)
+rownames(mVar) = c('fBatch', 'Residual')
+mVar = t(mVar)
+identical(rownames(mVar), rownames(mDat))
+
+dfResults = data.frame(mDat, mVar, symbol=getSYMBOL(rownames(mDat), 'hgu133plus2.db'))
+write.csv(dfResults, file='dataExternal/mansoor/dfResults.csv')
