@@ -36,3 +36,4 @@ vignettes/*.pdf
 Temp/*
 dataExternal/*
 *.Rproj
+*.rds
