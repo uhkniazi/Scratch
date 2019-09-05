@@ -17,7 +17,7 @@ parameters {
     real<lower=0.01> sigmaFactor2; // population level sd for factor 2
     vector[Nlevels2] nCoefFactor2; // number of random jitters, for levels of factor 2
     real<lower=0.01> sigmaFactor3; // population level sd for factor 3
-    vector[Nlevels2] nCoefFactor3; // number of random jitters, for levels of factor 3
+    vector[Nlevels3] nCoefFactor3; // number of random jitters, for levels of factor 3
 }
 transformed parameters {
   vector[Ntotal] mu; // fitted values from linear predictor
