@@ -8,19 +8,19 @@ data {
 parameters {
   // parameters to estimate in the model
     real intercept; // constant term
-    real<lower=0.01> sigmaFactor1; // population level sd for factor 1
+    //real<lower=0.01> sigmaFactor1; // population level sd for factor 1
     vector[Nlevels1] nCoefFactor1; // number of random jitters, for levels of factor 1
 }
 transformed parameters {
   vector[Ntotal] mu; // fitted values from linear predictor
-  mu = intercept + nCoefFactor1[NfactorMap1];
+  mu = nCoefFactor1[NfactorMap1];
   mu = inv_logit(mu);
 }
 model {
   // using generic priors to start with
-  sigmaFactor1 ~ cauchy(0, 1);
-  intercept ~ cauchy(0, 2);
-  nCoefFactor1 ~ normal(0, sigmaFactor1);
+  //sigmaFactor1 ~ exponential(1);
+  intercept ~ normal(0, 2);
+  nCoefFactor1 ~ normal(intercept, 1);
   // likelihood function
   y ~ binomial(Ntrials, mu);
 }

@@ -2,9 +2,9 @@
 
 # dfData = read.csv('dataExternal/NTD methylation_2probes and covariates for Umar.csv', header=T)
 # 
-# library(lme4)
-# 
-# fit.1 = glmer(cbind(probe1_Sox17_methylated, probe1_Sox17_unmethylated) ~ 1 + (1|diet) , data=dfData, family='binomial')
+library(lme4)
+
+fit.2 = glm(as.matrix(dfData[,lCn[[10]]]) ~ 1 + dfData.cov$Diets , family='binomial')
 # 
 # # load some test data
 # data("cbpp")
@@ -92,45 +92,33 @@
 library(rstan)
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
-stanDso = rstan::stan_model(file='binomialRegression3RandomEffects.stan')
-dfData = read.csv('dataExternal/NTD methylation_2probes and covariates for Umar.csv', header=T)
+stanDso = rstan::stan_model(file='binomialRegressionRandomEffects.stan')
+dfData = read.csv('dataExternal/S34_D1spMF_D3spMF_prom_1x_meth_unmeth_FEB2020.csv', header=T)
 
+## format the data 
+dfData.cov = dfData[,c(1:5)]
+dfData.orig = dfData
+cn = colnames(dfData.orig[,-c(1:5)])
+i = gsub('methylated|unmethylated', cn, replacement = '')
+i = factor(i)
+lCn = split(cn, f = i)
 ###################################### function to fit model
 modelFunction = function(lData){
-  fs = tryCatch(sampling(stanDso, data=lData, iter=1000, chains=4, pars=c('intercept', 'nCoefFactor1',
-                                                                           'nCoefFactor2', 
-                                                                           'nCoefFactor3',
-                                                                           'sigmaFactor1',
-                                                                           'sigmaFactor2',
-                                                                           'sigmaFactor3'),
+  fs = tryCatch(sampling(stanDso, data=lData, iter=1000, chains=4, pars=c('intercept', 'nCoefFactor1'),
+                                                                           #'sigmaFactor1'),
                       cores=4), error=function(e) NULL)
   return(fs)
 }
 
 ## format the lStan data input before calling function
-lStanData.1 = list(Ntotal=nrow(dfData),
-                 Nlevels1 = nlevels(dfData$diet),
-                 NfactorMap1 = as.numeric(dfData$diet),
-                 Nlevels2 = nlevels(dfData$sex),
-                 NfactorMap2 = as.numeric(dfData$sex),
-                 Nlevels3 = nlevels(dfData$genotype),
-                 NfactorMap3 = as.numeric(dfData$genotype),
-                 y=dfData$probe1_Sox17_methylated,
-                 Ntrials=dfData$probe1_Sox17_methylated + dfData$probe1_Sox17_unmethylated)
+lStanData.1 = list(Ntotal=nrow(dfData.cov),
+                 Nlevels1 = nlevels(dfData.cov$Diets),
+                 NfactorMap1 = as.numeric(dfData.cov$Diets),
+                 y=dfData[,lCn[['prom_68215_']][1]],
+                 Ntrials=dfData[,lCn[['prom_68215_']][1]]+dfData[,lCn[['prom_68215_']][2]])
 
 fit.stan.1 = modelFunction(lStanData.1)
 
-lStanData.2 = list(Ntotal=nrow(dfData),
-                 Nlevels1 = nlevels(dfData$diet),
-                 NfactorMap1 = as.numeric(dfData$diet),
-                 Nlevels2 = nlevels(dfData$sex),
-                 NfactorMap2 = as.numeric(dfData$sex),
-                 Nlevels3 = nlevels(dfData$genotype),
-                 NfactorMap3 = as.numeric(dfData$genotype),
-                 y=dfData$probe2_Gtf3a_methylated,
-                 Ntrials=dfData$probe2_Gtf3a_methylated + dfData$probe2_Gtf3a_unmethylated)
-
-fit.stan.2 = modelFunction(lStanData.2)
 
 ##################################### extract results
 ## function to calculate statistics for differences between coefficients
@@ -145,7 +133,9 @@ getDifference = function(ivData, ivBaseline){
   return(list(z=z, p=p))
 }
 
-extractResult = function(fit.stan, base='diet1', deflection='diet2', lev=levels(dfData$diet)){
+levels(dfData.cov$Diets)
+
+extractResult = function(fit.stan, base='HFA', deflection='LFA', lev=levels(dfData.cov$Diets)){
   if (is.null(fit.stan)) return(NULL)
   mCoef = extract(fit.stan)$nCoefFactor1
   colnames(mCoef) = lev
@@ -157,7 +147,39 @@ extractResult = function(fit.stan, base='diet1', deflection='diet2', lev=levels(
   return(r)
 }
 
-extractResult(fit.stan.1)
-extractResult(fit.stan.2)
+lResults = vector(mode = 'list', length=length(lCn))
+# extractResult(fit.stan.1)
+for (i in 1188:length(lCn)) {
+  x = lCn[[i]]
+  ## format the lStan data input before calling function
+  lStanData.x = list(Ntotal=nrow(dfData.cov),
+                     Nlevels1 = nlevels(dfData.cov$Diets),
+                     NfactorMap1 = as.numeric(dfData.cov$Diets),
+                     y=dfData[,x[1]],
+                     Ntrials=dfData[,x[1]]+dfData[,x[2]])
+  
+  fit.stan.x = modelFunction(lStanData.x)
+  lResults[[i]] = extractResult(fit.stan.x)
+  rm(fit.stan.x)
+  gc(reset = T)
+  save(lResults, file='results/miho_2.rds')
+  cat(paste(i, ' ......'))
+}
 
 
+# lResults = lapply(lCn, function(x){
+#   ## format the lStan data input before calling function
+#   lStanData.x = list(Ntotal=nrow(dfData.cov),
+#                      Nlevels1 = nlevels(dfData.cov$Diets),
+#                      NfactorMap1 = as.numeric(dfData.cov$Diets),
+#                      y=dfData[,x[1]],
+#                      Ntrials=dfData[,x[1]]+dfData[,x[2]])
+#   
+#   fit.stan.x = modelFunction(lStanData.x)
+#   ret = extractResult(fit.stan.x)
+#   rm(fit.stan.x)
+#   gc(reset = T)
+#   return(ret)
+# })
+# 
+# save(lResults, file='results/miho.rds')
