@@ -21,7 +21,7 @@ table(is.na(rowSums(m)))
 table(is.na(colSums(m)))
 # i = which(is.na(colSums(m)))
 rm(m)
-dfData = data.frame((CTranscriptomics))
+dfData = data.frame(log(CTranscriptomics+1))
 table(complete.cases(dfData))
 dim(dfData)
 ## remove variables with 0 sd i.e. not changing 
@@ -155,7 +155,7 @@ xyplot(ivPredict ~ fGroups, xlab='Actual Group',
 
 # ## find correlated variables
 dim(dfData)
-mData = as.matrix(dfData[,-87])
+mData = as.matrix(dfData[,-119])
 length(as.vector(mData))
 mCor = cor(mData, use="na.or.complete")
 library(caret)
@@ -175,7 +175,7 @@ cvTopVariables.rf = rownames(CVariableSelection.RandomForest.getVariables(oVar.r
 cvTopVariables.bin = names(m)[1:20]
 table(cvTopVariables.bin %in% cvTopVariables.rf)
 cvTopVariables = unique(c(cvTopVariables.rf, cvTopVariables.bin))
-
+length(cvTopVariables)
 ## subset selection
 dfData = lData.train$data[,cvTopVariables]
 fGroups = lData.train$covariates
@@ -184,7 +184,7 @@ plot.var.selection(oVar.sub)
 table(fGroups)
 log(40)
 # select 4 variables
-cvVar = CVariableSelection.ReduceModel.getMinModel(oVar.sub, size = 3)
+cvVar = CVariableSelection.ReduceModel.getMinModel(oVar.sub, size = 4)
 
 table(cvVar %in% cvTopVariables.bin)
 table(cvVar %in% cvTopVariables.rf)
