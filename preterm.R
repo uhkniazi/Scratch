@@ -11,16 +11,20 @@ tapply(CGSamDel, factor(Ccohort), summary)
 xtabs(~ Ccohort + Csite)
 ## prepare data to use in the analysis
 # col names are very long, replace with shorter names
-dfKey = data.frame(key = paste('Met', 1:ncol(CMetabolomics), sep=':'), name=colnames(CMetabolomics))
-colnames(CMetabolomics) = dfKey$key
+# dfKey = data.frame(key = paste('Met', 1:ncol(CMetabolomics), sep=':'), name=colnames(CMetabolomics))
+# colnames(CMetabolomics) = dfKey$key
 
-m = log(CMetabolomics)
+m = (CProteomics)
 table(is.finite(m))
 table(is.na(m))
+table(is.na(rowSums(m)))
+table(is.na(colSums(m)))
+i = which(is.na(colSums(m)))
 rm(m)
-dfData = data.frame(log(CMetabolomics))
+dfData = data.frame((CProteomics)[,-i])
 table(complete.cases(dfData))
-
+dim(CProteomics)
+dim(dfData)
 ## remove variables with 0 sd i.e. not changing 
 s = apply(dfData, 2, sd)
 summary(s)
@@ -39,6 +43,7 @@ dfPvals = cbind(dfPvals, p.adjust(dfPvals[,1], method = 'BH'))
 colnames(dfPvals) = c('pvalue', 'p.adj')
 dfPvals = data.frame(dfPvals)
 f = which(dfPvals$pvalue < 0.01)
+length(f)
 cvTopVariables.lm = rownames(dfPvals)[f]
 
 
@@ -87,7 +92,7 @@ lStanData = list(Ntotal=length(lData$resp), Ncol=ncol(lData$mModMatrix), X=lData
 fit.stan = sampling(stanDso, data=lStanData, iter=1000, chains=4, pars=c('tau', 'betas2', 'log_lik'), cores=4,# init=initf,
                     control=list(adapt_delta=0.99, max_treedepth = 13))
 
-save(fit.stan, file='temp/fit.stan.binom_preterm_met.rds')
+# save(fit.stan, file='temp/fit.stan.binom_preterm_met.rds')
 
 print(fit.stan, c('betas2', 'tau'))
 print(fit.stan, 'tau')
@@ -147,7 +152,7 @@ xyplot(ivPredict ~ fGroups, xlab='Actual Group',
 
 # ## find correlated variables
 dim(dfData)
-mData = as.matrix(dfData[,-60])
+mData = as.matrix(dfData[,-87])
 length(as.vector(mData))
 mCor = cor(mData, use="na.or.complete")
 library(caret)
@@ -176,7 +181,10 @@ plot.var.selection(oVar.sub)
 table(fGroups)
 log(40)
 # select 4 variables
-cvVar = CVariableSelection.ReduceModel.getMinModel(oVar.sub, size = 4)
+cvVar = CVariableSelection.ReduceModel.getMinModel(oVar.sub, size = 3)
+
+table(cvVar %in% cvTopVariables.bin)
+table(cvVar %in% cvTopVariables.rf)
 
 # cross validation
 oCV.lda = CCrossValidation.LDA(dfData[,cvVar], dfData[,cvVar], fGroups, fGroups, level.predict = '1',
