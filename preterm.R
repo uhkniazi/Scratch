@@ -14,20 +14,23 @@ xtabs(~ Ccohort + Csite)
 # dfKey = data.frame(key = paste('Met', 1:ncol(CMetabolomics), sep=':'), name=colnames(CMetabolomics))
 # colnames(CMetabolomics) = dfKey$key
 
-m = (CProteomics)
+m = log((CTranscriptomics)+1)
 table(is.finite(m))
 table(is.na(m))
 table(is.na(rowSums(m)))
 table(is.na(colSums(m)))
-i = which(is.na(colSums(m)))
+# i = which(is.na(colSums(m)))
 rm(m)
-dfData = data.frame((CProteomics)[,-i])
+dfData = data.frame((CTranscriptomics))
 table(complete.cases(dfData))
-dim(CProteomics)
 dim(dfData)
 ## remove variables with 0 sd i.e. not changing 
 s = apply(dfData, 2, sd)
 summary(s)
+s = which(s == 0)
+length(s)
+dfData = dfData[,-s]
+dim(dfData)
 lData.train = list(data=dfData, covariates=factor(Ccohort))
 
 p.vals = lapply(1:ncol(lData.train$data), function(x){
